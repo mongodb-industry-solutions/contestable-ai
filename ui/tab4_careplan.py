@@ -1,4 +1,5 @@
 from __future__ import annotations
+import html
 from datetime import datetime
 
 import plotly.graph_objects as go
@@ -12,8 +13,6 @@ _OPTION_COLOURS = {"A": "#2E86AB", "B": "#E67E22", "C": "#27AE60"}
 
 def _before_after_chart(scores_before: dict, scores_after: dict) -> go.Figure:
     options = ["A", "B", "C"]
-    x_before = [f"Opt {o} — Before" for o in options]
-    x_after = [f"Opt {o} — After" for o in options]
     y_before = [scores_before.get(o, 0) * 100 for o in options]
     y_after = [scores_after.get(o, 0) * 100 for o in options]
 
@@ -79,9 +78,9 @@ def render_tab4() -> None:
                 Recommended Care Plan
             </div>
             <div style="font-size:1.5rem;font-weight:700;margin:4px 0;">
-                Option {rec_opt}: {CARE_OPTIONS.get(rec_opt, '')}
+                Option {rec_opt}: {html.escape(CARE_OPTIONS.get(rec_opt, ''))}
             </div>
-            <div style="font-size:0.9rem;opacity:0.9;margin-top:8px;">{plan.get('rationale', '')}</div>
+            <div style="font-size:0.9rem;opacity:0.9;margin-top:8px;">{html.escape(plan.get('rationale', ''))}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -98,7 +97,7 @@ def render_tab4() -> None:
                     <div style="min-width:24px;height:24px;background:{opt_colour};color:white;
                                  border-radius:50%;display:flex;align-items:center;justify-content:center;
                                  font-weight:700;font-size:0.8rem;">{i}</div>
-                    <div style="font-size:0.88rem;color:#333;padding-top:3px;">{step}</div>
+                    <div style="font-size:0.88rem;color:#333;padding-top:3px;">{html.escape(step)}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -110,7 +109,7 @@ def render_tab4() -> None:
             st.markdown(
                 f'<div style="background:#F8FAFC;border-left:3px solid {opt_colour};'
                 f'padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:8px;'
-                f'font-size:0.83rem;color:#333;">{da}</div>',
+                f'font-size:0.83rem;color:#333;">{html.escape(da)}</div>',
                 unsafe_allow_html=True,
             )
 

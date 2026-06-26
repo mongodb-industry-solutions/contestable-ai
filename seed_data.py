@@ -265,7 +265,7 @@ def main() -> None:
         print("  Vector search index created (may take 1-2 minutes to build on Atlas).")
     except Exception as e:
         print(f"  Warning: could not create search index automatically: {e}")
-        print("  Create it manually in Atlas UI: index name 'vector_index', field 'embedding', 1536 dims, cosine.")
+        print(f"  Create it manually in Atlas UI: index name 'vector_index', field 'embedding', {VOYAGE_EMBEDDING_DIMS} dims, cosine.")
 
     print("\nSeed complete. Wait ~2 minutes for the vector index to finish building before running the app.")
     client.close()
