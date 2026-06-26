@@ -1,0 +1,10 @@
+streamlit>=1.35.0
+crewai>=0.63.0
+pymongo>=4.7.0
+openai>=1.35.0
+voyageai>=0.4.1
+plotly>=5.22.0
+python-dotenv>=1.0.0
+pydantic>=2.7.0
+numpy>=1.26.0
+pandas>=2.2.0
