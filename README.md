@@ -12,7 +12,7 @@ Most AI demos show AI making a decision. This one shows AI making a *contestable
 
 Four specialist AI agents review 21 days of wearable sensor data for a 74-year-old patient and generate arguments for and against three care plan options. A mathematical scoring framework (QBAF — Quantitative Bipolar Argumentation Framework) weighs all arguments and surfaces a recommendation. Then the Family Physician steps in — rejecting an argument they disagree with, adding clinical context the AI didn't have — and the recommendation changes. Everything is stored in MongoDB Atlas with a full audit trail.
 
-**Forexample:** AI recommends Option A (insulin adjustment). GP adds family history of arrhythmia. Option C (comprehensive review) wins.
+**For example:** AI recommends Option A (insulin adjustment). GP adds family history of arrhythmia. Option C (comprehensive review) wins.
 
 ---
 
