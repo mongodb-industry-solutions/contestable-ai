@@ -1,5 +1,6 @@
 from __future__ import annotations
 import difflib
+import html
 import uuid
 
 import streamlit as st
@@ -22,8 +23,8 @@ GP_EDITOR_ROLE = "Family Physician"
 
 
 def _word_diff_html(original: str, modified: str) -> str:
-    orig_words = original.split()
-    mod_words = modified.split()
+    orig_words = html.escape(original).split()
+    mod_words = html.escape(modified).split()
     matcher = difflib.SequenceMatcher(None, orig_words, mod_words)
     parts = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -89,9 +90,9 @@ def _render_arg_card(arg: dict, edits_done: dict) -> None:
         orig = arg.get("original_content") or arg["content"]
         body = _word_diff_html(orig, edit["content"])
     elif is_rejected:
-        body = f'<s style="color:#bbb;">{arg["content"]}</s>'
+        body = f'<s style="color:#bbb;">{html.escape(arg["content"])}</s>'
     else:
-        body = arg["content"]
+        body = html.escape(arg["content"])
 
     opacity = "0.4" if is_rejected else "1"
 
@@ -129,6 +130,7 @@ def _render_arg_card(arg: dict, edits_done: dict) -> None:
                         "editor_role": GP_EDITOR_ROLE,
                     }
                     st.session_state.modifying_arg = None
+                    st.session_state.phase3_complete = False
                     st.rerun()
             with c2:
                 if st.form_submit_button("Cancel"):
@@ -139,10 +141,12 @@ def _render_arg_card(arg: dict, edits_done: dict) -> None:
         with b1:
             if st.button("✓", key=f"acc_{aid}", help="Accept"):
                 st.session_state.pending_edits[aid] = {"edit_type": "accept", "editor_role": GP_EDITOR_ROLE}
+                st.session_state.phase3_complete = False
                 st.rerun()
         with b2:
             if st.button("✗", key=f"rej_{aid}", help="Reject"):
                 st.session_state.pending_edits[aid] = {"edit_type": "reject", "editor_role": GP_EDITOR_ROLE}
+                st.session_state.phase3_complete = False
                 st.rerun()
         with b3:
             if st.button("✏️", key=f"mod_{aid}", help="Modify"):

@@ -36,6 +36,8 @@ def run_careplan_agent(
     Phase 4: Generate structured care plan from validated arguments.
     Returns care plan dict and persists to MongoDB.
     """
+    if not option_scores_after:
+        option_scores_after = {opt: 0.0 for opt in ["A", "B", "C"]}
     recommended_option = max(option_scores_after, key=option_scores_after.get)
 
     # Prepare top arguments by final score for context
