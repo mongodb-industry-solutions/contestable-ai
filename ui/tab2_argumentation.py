@@ -3,36 +3,45 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
-from agents.specialist_agents import run_single_specialist
 from argumentation.qbaf import run_scoring
 from data import db
-from data.models import AGENT_ROLES, CARE_OPTIONS
-
-_AGENT_ICONS = {
-    "Endocrinologist": "🔬",
-    "Cardiologist": "❤️",
-    "Sleep Medicine": "🌙",
-    "Geriatrician": "👴",
-}
-
-_AGENT_COLOURS = {
-    "Endocrinologist": "#1B4F72",
-    "Cardiologist": "#A93226",
-    "Sleep Medicine": "#6C3483",
-    "Geriatrician": "#1E8449",
-}
 
 _OPTION_COLOURS = {"A": "#2E86AB", "B": "#E67E22", "C": "#27AE60"}
 
+# Healthcare icons/colours
+_HC_AGENT_ICONS = {
+    "Endocrinologist": "🔬",
+    "Cardiologist":    "❤️",
+    "Sleep Medicine":  "🌙",
+    "Geriatrician":    "👴",
+}
+_HC_AGENT_COLOURS = {
+    "Endocrinologist": "#1B4F72",
+    "Cardiologist":    "#A93226",
+    "Sleep Medicine":  "#6C3483",
+    "Geriatrician":    "#1E8449",
+}
+
+# Manufacturing icons/colours
+_MFG_AGENT_ICONS = {
+    "String Matcher":       "🔤",
+    "Documentation Reader": "📄",
+}
+_MFG_AGENT_COLOURS = {
+    "String Matcher":       "#1B4F72",
+    "Documentation Reader": "#7D6608",
+}
+
 
 def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figure:
-    """Create a Plotly scatter-based argument interaction graph."""
+    """Create argument interaction graph; works for any number of agents."""
     active = [a for a in arguments if not a.get("is_rejected", False)]
-    agent_list = AGENT_ROLES
-    option_list = ["A", "B", "C"]
+    agent_roles = list(dict.fromkeys(a["agent_role"] for a in active))
     option_x = {"A": 0.0, "B": 2.5, "C": 5.0}
-    agent_offset = {r: i * 0.55 for i, r in enumerate(agent_list)}
+    agent_offset = {r: i * 0.55 for i, r in enumerate(agent_roles)}
     type_y = {"support": 1.0, "challenge": -1.0}
+
+    all_icons = {**_HC_AGENT_ICONS, **_MFG_AGENT_ICONS}
 
     pos: dict[str, tuple[float, float]] = {}
     for arg in active:
@@ -40,7 +49,7 @@ def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figu
         y = type_y.get(arg["type"], 0)
         pos[arg["argument_id"]] = (x, y)
 
-    # Build attack edges (challenge → support, red) within each option
+    # Attack edges (challenge -> support) within each option
     edge_traces = []
     by_option: dict[str, dict[str, list]] = {}
     for arg in active:
@@ -62,7 +71,6 @@ def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figu
                         showlegend=False, hoverinfo="none",
                     ))
 
-    # Node trace
     node_x, node_y, colours, sizes, texts, hovers = [], [], [], [], [], []
     for arg in active:
         if arg["argument_id"] not in pos:
@@ -75,7 +83,7 @@ def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figu
         fs = arg.get("final_score") or 0.0
         sizes.append(10 + int(fs * 22))
         short_role = arg["agent_role"][:4]
-        texts.append(f"{_AGENT_ICONS.get(arg['agent_role'], '')} {short_role}")
+        texts.append(f"{all_icons.get(arg['agent_role'], '🤖')} {short_role}")
         hovers.append(
             f"<b>{arg['agent_role']}</b> — Option {arg['option']} ({arg['type']})<br>"
             f"τ={arg['tau']:.2f} | score={fs:.3f}<br>"
@@ -94,7 +102,6 @@ def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figu
         showlegend=False,
     )
 
-    # Option labels
     annotations = []
     for opt, bx in option_x.items():
         annotations.append(dict(
@@ -121,7 +128,68 @@ def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figu
     return fig
 
 
-def render_tab2() -> None:
+def _render_confidence_cards(confidence: dict, options: dict) -> None:
+    """Render confidence score cards for all options."""
+    conf_cols = st.columns(3, gap="medium")
+    for i, (opt, label) in enumerate(options.items()):
+        conf = confidence.get(opt, 0.0)
+        colour = "#27AE60" if conf > 0.65 else "#F39C12" if conf > 0.35 else "#E74C3C"
+        with conf_cols[i]:
+            st.markdown(
+                f'<div style="background:white;border:1px solid #D5D8DC;border-radius:8px;padding:14px;">'
+                f'<div style="font-weight:700;color:{colour};font-size:1rem;">Option {opt}</div>'
+                f'<div style="font-size:0.8rem;color:#555;margin:4px 0 8px;">{label}</div>'
+                f'<div style="background:#EEE;border-radius:6px;height:10px;">'
+                f'<div style="background:{colour};width:{int(conf*100)}%;height:10px;border-radius:6px;"></div>'
+                f'</div>'
+                f'<div style="font-size:0.9rem;font-weight:700;margin-top:6px;color:{colour};">'
+                f'{int(conf*100)}%</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
+def _render_argument_details(arguments: list[dict], agent_roles: list[str], agent_icons: dict, agent_colours: dict) -> None:
+    """Render the per-agent argument detail expanders."""
+    for role in agent_roles:
+        role_args = [a for a in arguments if a["agent_role"] == role]
+        icon = agent_icons.get(role, "🤖")
+        colour = agent_colours.get(role, "#333")
+        with st.expander(f"{icon} {role}", expanded=False):
+            arg_cols = st.columns(3, gap="small")
+            for j, opt in enumerate(["A", "B", "C"]):
+                opt_args = [a for a in role_args if a["option"] == opt]
+                with arg_cols[j]:
+                    st.markdown(
+                        f"<div style='font-weight:600;color:{_OPTION_COLOURS[opt]};font-size:0.85rem;'>"
+                        f"Option {opt}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    for arg in opt_args:
+                        fs = arg.get("final_score") or 0.0
+                        border_col = "#27AE60" if arg["type"] == "support" else "#E74C3C"
+                        type_label = "✅ Support" if arg["type"] == "support" else "⚠️ Challenge"
+                        st.markdown(
+                            f'<div style="background:#FAFAFA;border-left:3px solid {border_col};'
+                            f'padding:8px;border-radius:0 6px 6px 0;margin-bottom:8px;font-size:0.78rem;">'
+                            f'<div style="color:{border_col};font-weight:600;margin-bottom:4px;">{type_label}</div>'
+                            f'<div style="color:#333;line-height:1.4;">{arg["content"]}</div>'
+                            f'<div style="display:flex;gap:8px;margin-top:6px;">'
+                            f'<span style="background:#2E86AB;color:white;padding:1px 7px;'
+                            f'border-radius:10px;font-size:0.7rem;">τ={arg["tau"]:.2f}</span>'
+                            f'<span style="background:#555;color:white;padding:1px 7px;'
+                            f'border-radius:10px;font-size:0.7rem;">score={fs:.3f}</span>'
+                            f'</div></div>',
+                            unsafe_allow_html=True,
+                        )
+
+
+# ------------------------------------------------------------------ Healthcare tab
+
+def _render_tab2_healthcare() -> None:
+    from agents.specialist_agents import run_single_specialist
+    from data.models import AGENT_ROLES, CARE_OPTIONS
+
     st.markdown("### Phase 2 — Multi-Agent Argumentation")
 
     if not st.session_state.get("phase1_complete"):
@@ -150,11 +218,10 @@ def render_tab2() -> None:
                 progress = st.progress(0)
 
                 for i, role in enumerate(AGENT_ROLES):
-                    icon = _AGENT_ICONS.get(role, "🤖")
+                    icon = _HC_AGENT_ICONS.get(role, "🤖")
                     focus = _AGENT_FOCUS.get(role, "generating arguments…")
                     st.write(f"{icon} **{role}** — {focus}")
-                    progress.progress((i) / len(AGENT_ROLES),
-                                      text=f"Agent {i+1} of {len(AGENT_ROLES)}: {role}")
+                    progress.progress(i / len(AGENT_ROLES), text=f"Agent {i+1} of {len(AGENT_ROLES)}: {role}")
                     try:
                         args = run_single_specialist(role, ctx, st.session_state.session_id)
                         all_arguments.extend(args)
@@ -187,107 +254,160 @@ def render_tab2() -> None:
                     st.rerun()
         return
 
-    arguments: list[dict] = st.session_state.arguments
-    scores: dict = st.session_state.arg_scores
-    confidence: dict = st.session_state.option_confidence
+    arguments = st.session_state.arguments
+    scores = st.session_state.arg_scores
+    confidence = st.session_state.option_confidence
 
-    # ------------------------------------------------------------------ agent cards
     st.markdown("#### Agent Contributions")
     cols = st.columns(4, gap="small")
     for i, role in enumerate(AGENT_ROLES):
         role_args = [a for a in arguments if a["agent_role"] == role]
-        icon = _AGENT_ICONS.get(role, "🤖")
-        colour = _AGENT_COLOURS.get(role, "#333")
+        icon = _HC_AGENT_ICONS.get(role, "🤖")
+        colour = _HC_AGENT_COLOURS.get(role, "#333")
         with cols[i]:
             st.markdown(
-                f"""
-                <div style="background:white;border:1px solid #D5D8DC;border-radius:10px;
-                             padding:12px;text-align:center;border-top:4px solid {colour};">
-                    <div style="font-size:1.8rem;">{icon}</div>
-                    <div style="font-weight:700;font-size:0.85rem;color:{colour};">{role}</div>
-                    <div style="font-size:0.75rem;color:#888;margin-top:4px;">
-                        {len([a for a in role_args if a['type']=='support'])} support &nbsp;·&nbsp;
-                        {len([a for a in role_args if a['type']=='challenge'])} challenge
-                    </div>
-                </div>
-                """,
+                f'<div style="background:white;border:1px solid #D5D8DC;border-radius:10px;'
+                f'padding:12px;text-align:center;border-top:4px solid {colour};">'
+                f'<div style="font-size:1.8rem;">{icon}</div>'
+                f'<div style="font-weight:700;font-size:0.85rem;color:{colour};">{role}</div>'
+                f'<div style="font-size:0.75rem;color:#888;margin-top:4px;">'
+                f'{len([a for a in role_args if a["type"]=="support"])} support &nbsp;·&nbsp; '
+                f'{len([a for a in role_args if a["type"]=="challenge"])} challenge'
+                f'</div></div>',
                 unsafe_allow_html=True,
             )
 
-    # ------------------------------------------------------------------ option confidence
     st.divider()
     st.markdown("#### Option Confidence Scores")
+    _render_confidence_cards(confidence, CARE_OPTIONS)
 
-    conf_cols = st.columns(3, gap="medium")
-    for i, (opt, label) in enumerate(CARE_OPTIONS.items()):
-        conf = confidence.get(opt, 0.0)
-        colour = "#27AE60" if conf > 0.65 else "#F39C12" if conf > 0.35 else "#E74C3C"
-        with conf_cols[i]:
-            st.markdown(
-                f"""
-                <div style="background:white;border:1px solid #D5D8DC;border-radius:8px;padding:14px;">
-                    <div style="font-weight:700;color:{colour};font-size:1rem;">Option {opt}</div>
-                    <div style="font-size:0.8rem;color:#555;margin:4px 0 8px;">{label}</div>
-                    <div style="background:#EEE;border-radius:6px;height:10px;">
-                        <div style="background:{colour};width:{int(conf*100)}%;height:10px;border-radius:6px;"></div>
-                    </div>
-                    <div style="font-size:0.9rem;font-weight:700;margin-top:6px;color:{colour};">
-                        {int(conf*100)}%
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    # ------------------------------------------------------------------ argument details
     st.divider()
     st.markdown("#### Arguments by Agent")
+    _render_argument_details(arguments, AGENT_ROLES, _HC_AGENT_ICONS, _HC_AGENT_COLOURS)
 
-    for role in AGENT_ROLES:
-        role_args = [a for a in arguments if a["agent_role"] == role]
-        icon = _AGENT_ICONS.get(role, "🤖")
-        colour = _AGENT_COLOURS.get(role, "#333")
-        with st.expander(f"{icon} {role}", expanded=False):
-            arg_cols = st.columns(3, gap="small")
-            for j, opt in enumerate(["A", "B", "C"]):
-                opt_args = [a for a in role_args if a["option"] == opt]
-                with arg_cols[j]:
-                    st.markdown(
-                        f"<div style='font-weight:600;color:{_OPTION_COLOURS[opt]};font-size:0.85rem;'>"
-                        f"Option {opt}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    for arg in opt_args:
-                        fs = arg.get("final_score") or 0.0
-                        border_col = "#27AE60" if arg["type"] == "support" else "#E74C3C"
-                        type_label = "✅ Support" if arg["type"] == "support" else "⚠️ Challenge"
-                        st.markdown(
-                            f"""
-                            <div style="background:#FAFAFA;border-left:3px solid {border_col};
-                                         padding:8px;border-radius:0 6px 6px 0;margin-bottom:8px;
-                                         font-size:0.78rem;">
-                                <div style="color:{border_col};font-weight:600;margin-bottom:4px;">
-                                    {type_label}
-                                </div>
-                                <div style="color:#333;line-height:1.4;">{arg['content']}</div>
-                                <div style="display:flex;gap:8px;margin-top:6px;">
-                                    <span style="background:#2E86AB;color:white;padding:1px 7px;
-                                                 border-radius:10px;font-size:0.7rem;">τ={arg['tau']:.2f}</span>
-                                    <span style="background:#555;color:white;padding:1px 7px;
-                                                 border-radius:10px;font-size:0.7rem;">
-                                        score={fs:.3f}</span>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-
-    # ------------------------------------------------------------------ interaction graph
     st.divider()
     st.markdown("#### Argument Interaction Graph")
     st.caption(
         "Green nodes = supporting arguments | Red nodes = challenging arguments | "
         "Red edges = attack relations | Node size ∝ final score"
     )
-    fig = _build_arg_graph(arguments, scores)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(_build_arg_graph(arguments, scores), use_container_width=True)
+
+
+# ------------------------------------------------------------------ Manufacturing tab
+
+def _render_tab2_manufacturing() -> None:
+    from agents.mapping_agent import run_single_mapping_agent
+    from data.models import MAPPING_AGENT_ROLES, MAPPING_OPTIONS
+
+    st.markdown("### Phase 2 — Multi-Agent Mapping Analysis")
+
+    if not st.session_state.get("phase1_complete"):
+        st.warning("Complete Phase 1 first.")
+        return
+
+    if not st.session_state.get("phase2_complete"):
+        ctx = st.session_state.site_context
+        st.info(
+            f"Two AI agents will analyse the point name **{ctx.focus_point}** and generate arguments "
+            "for each of the three Brick ontology mapping options."
+        )
+
+        _AGENT_FOCUS = {
+            "String Matcher":       f"analysing the string pattern of '{ctx.focus_point}'…",
+            "Documentation Reader": "reading equipment documentation fragments…",
+        }
+
+        if st.button("▶ Run Phase 2", key="run_phase2", type="primary"):
+            all_arguments: list[dict] = []
+            error_occurred = False
+
+            with st.status("Running mapping agents…", expanded=True) as status:
+                progress = st.progress(0)
+
+                for i, role in enumerate(MAPPING_AGENT_ROLES):
+                    icon = _MFG_AGENT_ICONS.get(role, "🤖")
+                    focus = _AGENT_FOCUS.get(role, "generating arguments…")
+                    st.write(f"{icon} **{role}** — {focus}")
+                    progress.progress(i / len(MAPPING_AGENT_ROLES),
+                                      text=f"Agent {i+1} of {len(MAPPING_AGENT_ROLES)}: {role}")
+                    try:
+                        args = run_single_mapping_agent(role, ctx, st.session_state.session_id)
+                        all_arguments.extend(args)
+                        n_sup = sum(1 for a in args if a["type"] == "support")
+                        n_cha = sum(1 for a in args if a["type"] == "challenge")
+                        st.write(f"  ✅ {role} complete — {n_sup} supporting, {n_cha} challenging arguments")
+                    except Exception as e:
+                        st.write(f"  ❌ {role} failed: {e}")
+                        error_occurred = True
+                        break
+
+                    progress.progress((i + 1) / len(MAPPING_AGENT_ROLES))
+
+                if error_occurred:
+                    status.update(label="One or more agents failed — see errors above.", state="error")
+                else:
+                    st.write("⚙️ Scoring arguments via bipolar argumentation framework…")
+                    scores, confidence = run_scoring(all_arguments)
+                    for arg in all_arguments:
+                        arg["final_score"] = scores.get(arg["argument_id"])
+                    db.save_arguments(all_arguments)
+                    progress.progress(1.0, text="Complete")
+                    status.update(label="Both agents complete — arguments scored.", state="complete",
+                                  expanded=False)
+                    st.session_state.arguments = all_arguments
+                    st.session_state.arg_scores = scores
+                    st.session_state.option_confidence = confidence
+                    st.session_state.option_confidence_initial = dict(confidence)
+                    st.session_state.phase2_complete = True
+                    st.rerun()
+        return
+
+    arguments = st.session_state.arguments
+    scores = st.session_state.arg_scores
+    confidence = st.session_state.option_confidence
+
+    st.markdown("#### Agent Contributions")
+    cols = st.columns(2, gap="medium")
+    for i, role in enumerate(MAPPING_AGENT_ROLES):
+        role_args = [a for a in arguments if a["agent_role"] == role]
+        icon = _MFG_AGENT_ICONS.get(role, "🤖")
+        colour = _MFG_AGENT_COLOURS.get(role, "#333")
+        with cols[i]:
+            st.markdown(
+                f'<div style="background:white;border:1px solid #D5D8DC;border-radius:10px;'
+                f'padding:16px;text-align:center;border-top:4px solid {colour};">'
+                f'<div style="font-size:2rem;">{icon}</div>'
+                f'<div style="font-weight:700;font-size:0.9rem;color:{colour};margin-top:4px;">{role}</div>'
+                f'<div style="font-size:0.75rem;color:#888;margin-top:6px;">'
+                f'{len([a for a in role_args if a["type"]=="support"])} support &nbsp;·&nbsp; '
+                f'{len([a for a in role_args if a["type"]=="challenge"])} challenge'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    st.divider()
+    st.markdown("#### Option Confidence Scores")
+    _render_confidence_cards(confidence, MAPPING_OPTIONS)
+
+    st.divider()
+    st.markdown("#### Arguments by Agent")
+    _render_argument_details(arguments, MAPPING_AGENT_ROLES, _MFG_AGENT_ICONS, _MFG_AGENT_COLOURS)
+
+    st.divider()
+    st.markdown("#### Argument Interaction Graph")
+    st.caption(
+        "Green nodes = supporting arguments | Red nodes = challenging arguments | "
+        "Red edges = attack relations | Node size ∝ final score"
+    )
+    st.plotly_chart(_build_arg_graph(arguments, scores), use_container_width=True)
+
+
+# ------------------------------------------------------------------ Entry point
+
+def render_tab2() -> None:
+    domain = st.session_state.get("domain", "healthcare")
+    if domain == "manufacturing":
+        _render_tab2_manufacturing()
+    else:
+        _render_tab2_healthcare()

@@ -1,8 +1,8 @@
-# IoMT Contestable AI
+# Contestable AI — IoMT & Manufacturing Demo
 
-A multi-agent AI demo that shows what clinical decision-making looks like when humans stay in control. AI specialist agents analyse patient IoMT data and recommend a care plan — but the recommendation is **contestable**: a clinician can challenge, modify, or override any argument, and the system updates its recommendation accordingly. Every action is auditable.
+A multi-domain AI demo that shows what high-stakes decisions look like when humans stay in control. AI agents analyse data and propose a recommendation — but the recommendation is **contestable**: a domain expert can challenge, modify, or override any argument, and the system updates its recommendation accordingly. Every action is auditable.
 
-This is built as a reference demo for the medical devices / digital health vertical.
+Two domains are included: one in healthcare (patient IoMT review) and one in manufacturing (HVAC metadata normalisation). Both use the same underlying framework.
 
 ---
 
@@ -10,38 +10,43 @@ This is built as a reference demo for the medical devices / digital health verti
 
 Most AI demos show AI making a decision. This one shows AI making a *contestable* decision.
 
-Four specialist AI agents review 21 days of wearable sensor data for a 74-year-old patient and generate arguments for and against three care plan options. A mathematical scoring framework (QBAF — Quantitative Bipolar Argumentation Framework) weighs all arguments and surfaces a recommendation. Then the Family Physician steps in — rejecting an argument they disagree with, adding clinical context the AI didn't have — and the recommendation changes. Everything is stored in MongoDB Atlas with a full audit trail.
+Specialist AI agents generate arguments for and against a set of options. A mathematical scoring framework (QBAF) weighs all arguments and surfaces a recommendation. Then the human expert steps in — rejecting an argument they disagree with, adding context the AI didn't have — and the recommendation changes. The whole interaction is stored in MongoDB Atlas with a full audit trail.
 
-**For example:** AI recommends Option A (insulin adjustment). GP adds family history of arrhythmia. Option C (comprehensive review) wins.
+### Healthcare scenario
+
+Four specialist agents review 21 days of wearable sensor data for a 74-year-old patient and debate three care plan options. The Family Physician rejects a flawed argument and adds family cardiac history. Option C (comprehensive review) wins over Option A (insulin adjustment alone).
+
+### Manufacturing scenario
+
+Two AI agents analyse a proprietary HVAC point name (`AHU-1-DISCH-T` on an EQ-7700 series unit) and propose a Brick ontology mapping. The String Matcher favours Option B (Discharge sensor) based on the abbreviation. The Documentation Reader finds section 4.2 of the manual and argues for Option C (Mixed Air sensor). A Brick domain expert rejects the String Matcher's challenge and adds documentation-backed evidence. Option C wins — the correct mapping per the equipment documentation.
 
 ---
 
-## Architecture
+## Architecture (both domains share the same 4-phase structure)
 
 ```
-IoMT Telemetry (MongoDB)
+Data Source (MongoDB)
         ↓
-Phase 1 — Patient Analyzer Agent
-    Pulls 21 days of CGM, HRV, BP, sleep data
-    Vector search on historical cases (Voyage AI embeddings)
-    Produces structured PatientContext
+Phase 1 — Data Analyst Agent
+    Reads site/patient data from MongoDB
+    Vector search on historical cases / verified mappings (Voyage AI embeddings)
+    Produces structured context (PatientContext or SiteContext)
+    Saved to session_contexts collection
         ↓
-Phase 2 — 4 Specialist Agents (CrewAI)
-    Endocrinologist · Cardiologist · Sleep Medicine · Geriatrician
+Phase 2 — Specialist Agents (CrewAI, 4 for healthcare / 2 for manufacturing)
     Each generates 6 arguments (support + challenge × 3 options)
     QBAF scoring: score = sigmoid(τ + 0.3·Σsupport − 0.3·Σchallenge)
-    → Option A leads
+    → One option leads on initial scores
         ↓
-Phase 3 — Human Contestation (Family Physician)
+Phase 3 — Human Contestation
     Accept / Reject / Modify any argument
-    Add new arguments with clinical context
-    Recompute QBAF scores
-    → Option C wins
+    Add new arguments with domain expert context
+    Recompute QBAF scores → recommendation changes
         ↓
-Phase 4 — Care Plan Agent
-    Generates final care plan with rationale + implementation steps
-    Before/after confidence chart
-    Full audit trail saved to MongoDB
+Phase 4 — Output Agent
+    Healthcare: generates care plan with rationale + implementation steps
+    Manufacturing: generates onboarding record with propagation steps
+    Before/after confidence chart + full audit trail saved to MongoDB
 ```
 
 ---
@@ -52,7 +57,7 @@ Phase 4 — Care Plan Agent
 |---|---|
 | UI | Streamlit |
 | Agent orchestration | CrewAI |
-| LLM | GPT-4o (OpenAI / Grove gateway) |
+| LLM | GPT-4o (OpenAI or Grove gateway) |
 | Embeddings | Voyage AI (`voyage-3-large`, 1024 dims) |
 | Database | MongoDB Atlas (time series, vector search, document) |
 | Argumentation | QBAF — pure Python, 10-iteration convergence |
@@ -63,26 +68,29 @@ Phase 4 — Care Plan Agent
 ## Project structure
 
 ```
-├── app.py                      # Streamlit entry point
-├── seed_data.py                # Populate MongoDB with telemetry + historical cases
+├── app.py                        # Streamlit entry point + domain switcher
+├── seed_data.py                  # Seed MongoDB (both domains)
 ├── data/
-│   ├── config.py               # Env config, OpenAI + Voyage client factories
-│   ├── db.py                   # MongoDB singleton + query functions
-│   └── models.py               # Pydantic models, CARE_OPTIONS, AGENT_ROLES
+│   ├── config.py                 # Env config, client factories
+│   ├── db.py                     # MongoDB singleton + query functions
+│   └── models.py                 # Pydantic models, DOMAIN_CONFIGS, options
 ├── agents/
-│   ├── patient_analyzer.py     # Phase 1: patient context + vector search
-│   ├── specialist_agents.py    # Phase 2: 4 specialist CrewAI agents
-│   └── careplan_agent.py       # Phase 4: final care plan generation
+│   ├── patient_analyzer.py       # Phase 1 healthcare: PatientContext
+│   ├── specialist_agents.py      # Phase 2 healthcare: 4 specialist agents
+│   ├── careplan_agent.py         # Phase 4 healthcare: care plan generation
+│   ├── site_reader.py            # Phase 1 manufacturing: SiteContext
+│   ├── mapping_agent.py          # Phase 2 manufacturing: String Matcher + Documentation Reader
+│   └── onboarding_agent.py       # Phase 4 manufacturing: onboarding record
 ├── argumentation/
-│   └── qbaf.py                 # QBAF scoring engine
+│   └── qbaf.py                   # QBAF scoring engine
 ├── contestation/
-│   └── handler.py              # Apply GP edits + rescore
+│   └── handler.py                # Apply expert edits + rescore
 └── ui/
-    ├── sidebar.py              # Patient info, phase status, demo guide
-    ├── tab1_overview.py        # Phase 1 charts + complexity assessment
-    ├── tab2_argumentation.py   # Phase 2 live agent progress + argument graph
-    ├── tab3_contestation.py    # Phase 3 argument cards + GP controls
-    └── tab4_careplan.py        # Phase 4 care plan + audit trail
+    ├── sidebar.py                # Domain-aware sidebar + demo guide
+    ├── tab1_overview.py          # Phase 1 (branched by domain)
+    ├── tab2_argumentation.py     # Phase 2 (branched by domain)
+    ├── tab3_contestation.py      # Phase 3 (domain-aware options + reviewer)
+    └── tab4_careplan.py          # Phase 4 (branched by domain)
 ```
 
 ---
@@ -90,9 +98,7 @@ Phase 4 — Care Plan Agent
 ## Prerequisites
 
 - Python 3.11+
-- MongoDB Atlas cluster with:
-  - A database named `iomt_contestable_ai`
-  - A **Vector Search index** on `historical_cases` collection (see setup below)
+- MongoDB Atlas cluster with a database named `iomt_contestable_ai`
 - OpenAI API key (or Grove gateway credentials)
 - Voyage AI API key
 
@@ -117,21 +123,19 @@ cp .env.example .env
 # Edit .env with your credentials
 ```
 
-**3. Seed the database**
+**3. Seed both domains**
 
 ```bash
 python seed_data.py
 ```
 
-This creates synthetic telemetry (147 readings) and 5 historical cases with Voyage AI embeddings in MongoDB Atlas.
+This seeds:
+- **Healthcare:** 147 IoMT telemetry readings + 5 historical cases with Voyage AI embeddings
+- **Manufacturing:** SITE-0042 site document + 5 verified Brick mappings with embeddings
 
-**4. Create the Atlas Vector Search index**
+It also attempts to create both Atlas Vector Search indexes automatically. If that fails (Atlas M0 free tiers restrict programmatic index creation), create them manually:
 
-In MongoDB Atlas UI → your cluster → Search Indexes → Create Index:
-
-- Collection: `iomt_contestable_ai.historical_cases`
-- Index name: `vector_index`
-- Definition:
+**Healthcare — `historical_cases.vector_index`**
 ```json
 {
   "fields": [{
@@ -143,7 +147,21 @@ In MongoDB Atlas UI → your cluster → Search Indexes → Create Index:
 }
 ```
 
-**5. Run the app**
+**Manufacturing — `verified_mappings.mapping_vector_index`**
+```json
+{
+  "fields": [{
+    "type": "vector",
+    "path": "embedding",
+    "numDimensions": 1024,
+    "similarity": "cosine"
+  }]
+}
+```
+
+Both indexes take 1–2 minutes to build after creation. Run the app only after both show status **Active**.
+
+**4. Run the app**
 
 ```bash
 streamlit run app.py
@@ -151,28 +169,55 @@ streamlit run app.py
 
 ---
 
-## Demo flow
+## Demo flows
 
-Open the **🎯 Demo Guide** in the sidebar for a step-by-step walkthrough. The core narrative:
+The **🎯 Demo Guide** in the sidebar gives step-by-step instructions for the active domain.
 
-1. Run Phase 1 — AI analyses patient trends (~20s)
-2. Run Phase 2 — 4 agents generate 24 arguments, Option A leads (~2 min)
-3. Phase 3 — GP rejects the Cardiologist's challenge on Option C, adds a family history argument → **Option C wins**
-4. Phase 4 — Care plan generated with full audit trail
+### Healthcare
+
+| Phase | Action | Expected result |
+|---|---|---|
+| 1 | Run Phase 1 | ~20s · Patient summary, complexity badge, 4 trend charts, 3 similar cases |
+| 2 | Run Phase 2 | ~2 min · 4 agents complete · Option A leads at ~60–70% |
+| 3 | Select Option C · Reject Cardiologist challenge · Add GP argument (pre-filled) · Recompute | Option C overtakes A |
+| 4 | Generate Care Plan | Option C confirmed · Before/after chart · Audit trail |
+
+### Manufacturing
+
+| Phase | Action | Expected result |
+|---|---|---|
+| 1 | Run Phase 1 | ~20s · Site info, AHU-1-DISCH-T focus point, 3 doc fragments, 3 similar verified mappings |
+| 2 | Run Phase 2 | ~1 min · 2 agents complete · Option B likely leads (String Matcher favours "DISCH") |
+| 3 | Select Option C · Reject String Matcher challenge · Add expert argument (pre-filled) · Recompute | Option C wins |
+| 4 | Generate Onboarding Record | `brick:Mixed_Air_Temperature_Sensor` confirmed · Propagation steps · Audit trail |
+
+To switch between domains: click **🔄 Change Domain** in the sidebar. All session state resets.
 
 ---
 
 ## MongoDB collections
 
-| Collection | Purpose |
-|---|---|
-| `device_telemetry` | Time series IoMT readings (CGM, HRV, BP, sleep) |
-| `historical_cases` | Past patient cases with Voyage AI embeddings for vector search |
-| `arguments` | All AI-generated and GP-edited arguments per session |
-| `care_plans` | Final care plan output per session |
+| Collection | Domain | Purpose |
+|---|---|---|
+| `device_telemetry` | Healthcare | Time series IoMT readings (CGM, HRV, BP, sleep) |
+| `historical_cases` | Healthcare | Past patient cases with embeddings for vector search |
+| `site_telemetry` | Manufacturing | HVAC site documents (point lists, documentation fragments) |
+| `verified_mappings` | Manufacturing | Historical verified Brick mappings with embeddings |
+| `argument_records` | Both | AI-generated and human-edited arguments per session |
+| `care_plans` | Healthcare | Final care plan output per session |
+| `onboarding_records` | Manufacturing | Verified mapping record per session |
+| `session_contexts` | Both | PatientContext / SiteContext saved per session |
 
 ---
 
 ## Environment variables
 
-See `.env.example` for all required variables. The app supports both direct OpenAI and custom gateway configurations via `OPENAI_BASE_URL` and `OPENAI_API_KEY_HEADER`.
+| Variable | Required | Description |
+|---|---|---|
+| `MONGODB_URI` | Yes | Atlas connection string |
+| `OPENAI_API_KEY` | Yes | OpenAI or Grove API key |
+| `OPENAI_MODEL` | No | Model name (default: `gpt-4o`) |
+| `OPENAI_BASE_URL` | No | Gateway base URL (Grove / Azure / etc.) |
+| `OPENAI_API_KEY_HEADER` | No | Custom auth header name for gateways |
+| `VOYAGE_API_KEY` | Yes | Voyage AI API key |
+| `VOYAGE_MODEL` | No | Embedding model (default: `voyage-3-large`) |

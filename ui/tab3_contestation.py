@@ -6,18 +6,22 @@ import uuid
 import streamlit as st
 
 from contestation.handler import add_human_argument, apply_edits_and_rescore
-from data.models import CARE_OPTIONS
+from data.models import CARE_OPTIONS, DOMAIN_CONFIGS
 
 _OPTION_COLOURS = {"A": "#2E86AB", "B": "#E67E22", "C": "#27AE60"}
 
 _AGENT_ICONS = {
-    "Endocrinologist": "🔬",
-    "Cardiologist": "❤️",
-    "Sleep Medicine": "🌙",
-    "Geriatrician": "👴",
-    "Family Physician": "🩺",
+    "Endocrinologist":      "🔬",
+    "Cardiologist":         "❤️",
+    "Sleep Medicine":       "🌙",
+    "Geriatrician":         "👴",
+    "Family Physician":     "🩺",
+    "String Matcher":       "🔤",
+    "Documentation Reader": "📄",
+    "Brick Domain Expert":  "🏗️",
 }
 
+# Resolved at render time from domain config
 GP_ROLE = "Family Physician"
 GP_EDITOR_ROLE = "Family Physician"
 
@@ -62,7 +66,7 @@ def _confidence_bar(label: str, conf: float, colour: str) -> str:
     )
 
 
-def _render_arg_card(arg: dict, edits_done: dict) -> None:
+def _render_arg_card(arg: dict, edits_done: dict, reviewer_role: str = "Family Physician") -> None:
     """Render a single argument card with Accept / Reject / Modify controls."""
     aid = arg["argument_id"]
     edit = edits_done.get(aid, {})
@@ -127,7 +131,7 @@ def _render_arg_card(arg: dict, edits_done: dict) -> None:
                     st.session_state.pending_edits[aid] = {
                         "edit_type": "modify",
                         "content": new_content,
-                        "editor_role": GP_EDITOR_ROLE,
+                        "editor_role": reviewer_role,
                     }
                     st.session_state.modifying_arg = None
                     st.session_state.phase3_complete = False
@@ -140,12 +144,12 @@ def _render_arg_card(arg: dict, edits_done: dict) -> None:
         b1, b2, b3, _ = st.columns([1, 1, 1, 4])
         with b1:
             if st.button("✓", key=f"acc_{aid}", help="Accept"):
-                st.session_state.pending_edits[aid] = {"edit_type": "accept", "editor_role": GP_EDITOR_ROLE}
+                st.session_state.pending_edits[aid] = {"edit_type": "accept", "editor_role": reviewer_role}
                 st.session_state.phase3_complete = False
                 st.rerun()
         with b2:
             if st.button("✗", key=f"rej_{aid}", help="Reject"):
-                st.session_state.pending_edits[aid] = {"edit_type": "reject", "editor_role": GP_EDITOR_ROLE}
+                st.session_state.pending_edits[aid] = {"edit_type": "reject", "editor_role": reviewer_role}
                 st.session_state.phase3_complete = False
                 st.rerun()
         with b3:
@@ -155,7 +159,16 @@ def _render_arg_card(arg: dict, edits_done: dict) -> None:
 
 
 def render_tab3() -> None:
-    st.markdown("### Phase 3 — Human Contestation")
+    domain = st.session_state.get("domain", "healthcare")
+    cfg = DOMAIN_CONFIGS[domain]
+    reviewer_role = cfg["reviewer_role"]
+    reviewer_icon = _AGENT_ICONS.get(reviewer_role, "👤")
+    options = cfg["options"]
+    subject_id = cfg["subject_id"]
+    subject_label = cfg["subject_label"]
+
+    phase_label = cfg["phase_labels"][2]
+    st.markdown(f"### Phase 3 — {phase_label}")
 
     if not st.session_state.get("phase2_complete"):
         st.warning("Complete Phase 2 first.")
@@ -171,21 +184,19 @@ def render_tab3() -> None:
 
     edits_done = st.session_state.pending_edits
 
-    # ------------------------------------------------------------------ GP persona banner
+    # ------------------------------------------------------------------ reviewer persona banner
     st.markdown(
-        f"""
-        <div style="background:#EBF5FB;border:1px solid #AED6F1;border-radius:10px;
-                     padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">
-            <div style="font-size:1.8rem;">🩺</div>
-            <div>
-                <div style="font-weight:700;color:#1B4F72;font-size:0.95rem;">{GP_ROLE}</div>
-                <div style="font-size:0.8rem;color:#2E86AB;">Reviewing AI recommendations for Patient PAT-0074</div>
-                <div style="font-size:0.72rem;color:#888;margin-top:1px;">
-                    All contestation actions are attributed to this clinician in the audit trail.
-                </div>
-            </div>
-        </div>
-        """,
+        f'<div style="background:#EBF5FB;border:1px solid #AED6F1;border-radius:10px;'
+        f'padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px;">'
+        f'<div style="font-size:1.8rem;">{reviewer_icon}</div>'
+        f'<div>'
+        f'<div style="font-weight:700;color:#1B4F72;font-size:0.95rem;">{html.escape(reviewer_role)}</div>'
+        f'<div style="font-size:0.8rem;color:#2E86AB;">Reviewing AI recommendations for {html.escape(subject_label)} {html.escape(subject_id)}</div>'
+        f'<div style="font-size:0.72rem;color:#888;margin-top:1px;">'
+        f'All contestation actions are attributed to this reviewer in the audit trail.'
+        f'</div>'
+        f'</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
@@ -247,12 +258,12 @@ def render_tab3() -> None:
             "Click **Recompute Scores** when done."
         )
 
-        # Option selector buttons rendered as styled HTML pills + a hidden radio
+        # Option selector
         sel_opt = st.radio(
             "Viewing option:",
             ["A", "B", "C"],
             horizontal=True,
-            format_func=lambda x: f"Option {x} — {CARE_OPTIONS[x]}",
+            format_func=lambda x: f"Option {x} — {options[x]}",
             label_visibility="collapsed",
         )
 
@@ -266,7 +277,7 @@ def render_tab3() -> None:
             f'<div style="border-left:4px solid {opt_colour};padding:8px 14px;'
             f'background:white;border-radius:0 6px 6px 0;margin:8px 0 12px;">'
             f'<span style="font-weight:700;color:{opt_colour};">Option {sel_opt}</span> '
-            f'<span style="color:#555;font-size:0.85rem;">{CARE_OPTIONS[sel_opt]}</span></div>',
+            f'<span style="color:#555;font-size:0.85rem;">{html.escape(options[sel_opt])}</span></div>',
             unsafe_allow_html=True,
         )
 
@@ -279,7 +290,7 @@ def render_tab3() -> None:
                 unsafe_allow_html=True,
             )
             for arg in sup_args:
-                _render_arg_card(arg, edits_done)
+                _render_arg_card(arg, edits_done, reviewer_role)
 
         with col_cha:
             st.markdown(
@@ -288,46 +299,61 @@ def render_tab3() -> None:
                 unsafe_allow_html=True,
             )
             for arg in cha_args:
-                _render_arg_card(arg, edits_done)
+                _render_arg_card(arg, edits_done, reviewer_role)
 
     # ------------------------------------------------------------------ add argument
     st.divider()
-    st.markdown("#### Add GP Argument")
-    with st.expander(f"➕ Add an argument as {GP_ROLE}"):
+    st.markdown(f"#### Add {reviewer_role} Argument")
+
+    # Pre-filled text varies by domain
+    if domain == "manufacturing":
+        prefill_text = (
+            "AHU-1-DISCH-T is positioned in the mixed air plenum on EQ-7700 units per section 4.2 "
+            "of the equipment documentation. The DISCH abbreviation refers to the discharge side of "
+            "the mixing box, not the AHU discharge outlet. Option C (Mixed_Air_Temperature_Sensor) "
+            "is the only mapping consistent with both the sensor's physical location and the "
+            "manufacturer's naming convention documentation."
+        )
+    else:
+        prefill_text = (
+            "Patient has a documented family history of paroxysmal atrial fibrillation. "
+            "The current HRV decline pattern, combined with rising nocturnal BP readings, "
+            "mirrors the prodromal profile seen before arrhythmia onset in first-degree relatives. "
+            "Option C is the only plan that simultaneously addresses the cardiovascular, metabolic, "
+            "and sleep contributors — deferring any of these risks compounding the others."
+        )
+
+    with st.expander(f"➕ Add an argument as {reviewer_role}"):
         with st.form("add_arg_form"):
             st.markdown(
                 f'<div style="font-size:0.82rem;color:#2E86AB;margin-bottom:10px;">'
-                f'🩺 Speaking as: <strong>{GP_ROLE}</strong></div>',
+                f'{reviewer_icon} Speaking as: <strong>{html.escape(reviewer_role)}</strong></div>',
                 unsafe_allow_html=True,
             )
             f_col1, f_col2 = st.columns(2)
             with f_col1:
                 new_option = st.selectbox(
                     "Relates to option", ["A", "B", "C"],
-                    format_func=lambda x: f"Option {x}: {CARE_OPTIONS[x][:45]}…",
+                    format_func=lambda x: f"Option {x}: {options[x][:45]}…",
                 )
             with f_col2:
                 new_type = st.radio("Argument type", ["support", "challenge"], horizontal=True)
             new_content = st.text_area(
                 "Argument content", height=90,
-                value="Patient has a documented family history of paroxysmal atrial fibrillation. "
-                      "The current HRV decline pattern, combined with rising nocturnal BP readings, "
-                      "mirrors the prodromal profile seen before arrhythmia onset in first-degree relatives. "
-                      "Option C is the only plan that simultaneously addresses the cardiovascular, metabolic, "
-                      "and sleep contributors — deferring any of these risks compounding the others.",
+                value=prefill_text,
             )
             if st.form_submit_button("Add Argument", type="primary"):
                 if new_content.strip():
                     new_arg = {
-                        "argument_id": f"gp_{uuid.uuid4().hex[:8]}",
+                        "argument_id": f"reviewer_{uuid.uuid4().hex[:8]}",
                         "content": new_content.strip(),
                         "type": new_type,
-                        "agent_role": GP_EDITOR_ROLE,
+                        "agent_role": reviewer_role,
                         "option": new_option,
                         "tau": 0.85,
                         "evidence_refs": [],
                         "final_score": None,
-                        "editor_role": GP_EDITOR_ROLE,
+                        "editor_role": reviewer_role,
                     }
                     updated, scores, new_conf = add_human_argument(
                         st.session_state.arguments,
@@ -338,7 +364,7 @@ def render_tab3() -> None:
                     st.session_state.arg_scores = scores
                     st.session_state.option_confidence = new_conf
                     st.session_state.phase3_complete = True
-                    st.success(f"Argument added by {GP_ROLE} and scores recomputed.")
+                    st.success(f"Argument added by {reviewer_role} and scores recomputed.")
                     st.rerun()
                 else:
                     st.error("Please enter argument content.")
