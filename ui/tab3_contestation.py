@@ -6,7 +6,7 @@ import uuid
 import streamlit as st
 
 from contestation.handler import add_human_argument, apply_edits_and_rescore
-from data.models import CARE_OPTIONS, DOMAIN_CONFIGS
+from data.models import DOMAIN_CONFIGS
 
 _OPTION_COLOURS = {"A": "#2E86AB", "B": "#E67E22", "C": "#27AE60"}
 
@@ -20,10 +20,6 @@ _AGENT_ICONS = {
     "Documentation Reader": "📄",
     "Brick Domain Expert":  "🏗️",
 }
-
-# Resolved at render time from domain config
-GP_ROLE = "Family Physician"
-GP_EDITOR_ROLE = "Family Physician"
 
 
 def _word_diff_html(original: str, modified: str) -> str:
@@ -86,7 +82,7 @@ def _render_arg_card(arg: dict, edits_done: dict, reviewer_role: str = "Family P
     elif is_modified:
         badge = '<span style="background:#F39C12;color:white;padding:1px 7px;border-radius:10px;font-size:0.68rem;margin-left:4px;">MODIFIED</span>'
     elif is_gp_added:
-        badge = '<span style="background:#8E44AD;color:white;padding:1px 7px;border-radius:10px;font-size:0.68rem;margin-left:4px;">GP ADDED</span>'
+        badge = '<span style="background:#8E44AD;color:white;padding:1px 7px;border-radius:10px;font-size:0.68rem;margin-left:4px;">ADDED</span>'
     else:
         badge = ""
 

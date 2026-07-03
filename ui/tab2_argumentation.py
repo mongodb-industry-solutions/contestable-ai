@@ -1,4 +1,5 @@
 from __future__ import annotations
+import html
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -85,9 +86,9 @@ def _build_arg_graph(arguments: list[dict], scores: dict[str, float]) -> go.Figu
         short_role = arg["agent_role"][:4]
         texts.append(f"{all_icons.get(arg['agent_role'], '🤖')} {short_role}")
         hovers.append(
-            f"<b>{arg['agent_role']}</b> — Option {arg['option']} ({arg['type']})<br>"
+            f"<b>{html.escape(arg['agent_role'])}</b> — Option {arg['option']} ({arg['type']})<br>"
             f"τ={arg['tau']:.2f} | score={fs:.3f}<br>"
-            f"{arg['content'][:120]}…"
+            f"{html.escape(arg['content'][:120])}…"
         )
 
     node_trace = go.Scatter(
@@ -173,7 +174,7 @@ def _render_argument_details(arguments: list[dict], agent_roles: list[str], agen
                             f'<div style="background:#FAFAFA;border-left:3px solid {border_col};'
                             f'padding:8px;border-radius:0 6px 6px 0;margin-bottom:8px;font-size:0.78rem;">'
                             f'<div style="color:{border_col};font-weight:600;margin-bottom:4px;">{type_label}</div>'
-                            f'<div style="color:#333;line-height:1.4;">{arg["content"]}</div>'
+                            f'<div style="color:#333;line-height:1.4;">{html.escape(arg["content"])}</div>'
                             f'<div style="display:flex;gap:8px;margin-top:6px;">'
                             f'<span style="background:#2E86AB;color:white;padding:1px 7px;'
                             f'border-radius:10px;font-size:0.7rem;">τ={arg["tau"]:.2f}</span>'

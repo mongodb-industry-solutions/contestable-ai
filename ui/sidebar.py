@@ -162,7 +162,7 @@ This demo shows AI making a contestable care plan decision. Human expertise can 
 1. Select **Option C** using the radio buttons
 2. Find the **Cardiologist** challenge card
 3. Click **✗** to reject it
-4. Scroll to **Add GP Argument** → Option C, support
+4. Scroll to **Add Family Physician Argument** → Option C, support
 5. Text is pre-filled — click **Add Argument**
 6. Click **🔄 Recompute Scores**
 7. **Option C overtakes Option A** ✅
