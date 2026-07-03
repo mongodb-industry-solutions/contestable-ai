@@ -71,7 +71,7 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-def run_patient_analyzer(patient_id: str = "PAT-0074") -> PatientContext:
+def run_patient_analyzer(patient_id: str = "PAT-0074", session_id: str = "") -> PatientContext:
     """
     Phase 1: Analyze device telemetry, compute complexity, retrieve similar cases.
     Returns a PatientContext with all fields populated.
@@ -133,7 +133,7 @@ Return ONLY the JSON object.
     # Retrieve similar cases
     similar_cases = db.vector_search_cases(embedding, k=3)
 
-    return PatientContext(
+    ctx = PatientContext(
         patient_id=patient_id,
         complexity_score=parsed.get("complexity_score", "High"),
         complexity_reason=parsed.get("complexity_reason", ""),
@@ -145,3 +145,8 @@ Return ONLY the JSON object.
         sleep_trend=parsed.get("sleep_trend", ""),
         similar_cases=similar_cases,
     )
+
+    if session_id:
+        db.save_context(ctx.model_dump(), session_id, "healthcare")
+
+    return ctx
