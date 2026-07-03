@@ -107,14 +107,16 @@ def render_sidebar() -> None:
             )
 
             st.markdown("#### Focus Point")
+            focus_point = (
+                st.session_state.site_context.focus_point
+                if st.session_state.get("site_context")
+                else cfg.get("focus_point", "—")
+            )
             st.markdown(
-                """
-                <div style="background:#EBF5FB;border:1px solid #AED6F1;border-radius:8px;
-                             padding:10px 12px;">
-                    <code style="font-size:0.95rem;color:#1B4F72;font-weight:700;">AHU-1-DISCH-T</code>
-                    <div style="font-size:0.75rem;color:#2E86AB;margin-top:4px;">Ambiguous temperature sensor</div>
-                </div>
-                """,
+                f'<div style="background:#EBF5FB;border:1px solid #AED6F1;border-radius:8px;padding:10px 12px;">'
+                f'<code style="font-size:0.95rem;color:#1B4F72;font-weight:700;">{focus_point}</code>'
+                f'<div style="font-size:0.75rem;color:#2E86AB;margin-top:4px;">Ambiguous temperature sensor</div>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
 
@@ -246,9 +248,9 @@ All mapping decisions and expert review actions are saved in MongoDB.
 
         # ------------------------------------------------------------------ change domain button
         if st.button("🔄 Change Domain", key="change_domain", use_container_width=True):
-            # Reset all phase state when switching domains
             for key in [
-                "domain", "phase1_complete", "phase2_complete", "phase3_complete", "phase4_complete",
+                "domain", "session_id",
+                "phase1_complete", "phase2_complete", "phase3_complete", "phase4_complete",
                 "patient_context", "site_context", "arguments", "arg_scores",
                 "option_confidence", "option_confidence_initial",
                 "care_plan", "onboarding_record", "pending_edits", "modifying_arg",
