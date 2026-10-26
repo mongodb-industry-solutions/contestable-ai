@@ -148,7 +148,7 @@ def _render_domain_selector() -> None:
                         Manufacturing
                     </div>
                     <div style="font-size:0.82rem;color:#555;line-height:1.5;margin-bottom:16px;">
-                        Two AI agents analyse a site's proprietary HVAC point names and propose
+                        Two AI agents analyse a synthetic site's vendor-specific HVAC point names and propose
                         Brick ontology mappings. A domain expert reviews and corrects the proposal.
                     </div>
                 </div>

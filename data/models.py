@@ -44,7 +44,7 @@ DOMAIN_CONFIGS = {
         "name": "Manufacturing",
         "subtitle": "HVAC Metadata Normalization",
         "icon": "🏭",
-        "description": "Two AI agents analyse a site's proprietary HVAC point names and map them to a standard Brick ontology. A domain expert reviews and corrects the AI's mapping proposals.",
+        "description": "Two AI agents analyse a synthetic site's vendor-specific HVAC point names and map them to a standard Brick ontology. A domain expert reviews and corrects the AI's mapping proposals.",
         "subject_id": "SITE-0042",
         "subject_label": "Site",
         "options": MAPPING_OPTIONS,
