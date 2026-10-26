@@ -18,7 +18,7 @@ Four specialist agents review 21 days of wearable sensor data for a 74-year-old 
 
 ### Manufacturing scenario
 
-Two AI agents analyse a proprietary HVAC point name (`AHU-1-DISCH-T` on an EQ-7700 series unit) and propose a Brick ontology mapping. The String Matcher favours Option B (Discharge sensor) based on the abbreviation. The Documentation Reader finds section 4.2 of the manual and argues for Option C (Mixed Air sensor). A Brick domain expert rejects the String Matcher's challenge and adds documentation-backed evidence. Option C wins — the correct mapping per the equipment documentation.
+Two AI agents analyse a synthetic HVAC point name (`AHU-1-DISCH-T` on a fictional EQ-7700 series unit) and propose a Brick ontology mapping. The String Matcher favours Option B (Discharge sensor) based on the abbreviation. The Documentation Reader finds section 4.2 of the manual and argues for Option C (Mixed Air sensor). A Brick domain expert rejects the String Matcher's challenge and adds documentation-backed evidence. Option C wins — the correct mapping per the equipment documentation.
 
 ---
 

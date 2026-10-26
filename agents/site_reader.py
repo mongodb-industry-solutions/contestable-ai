@@ -42,7 +42,7 @@ def run_site_reader(site_id: str = "SITE-0042", session_id: str = "") -> SiteCon
         goal="Analyse an HVAC site's point naming conventions and identify metadata mapping challenges",
         backstory=(
             "You are a building automation systems analyst with 15 years of experience normalising "
-            "proprietary HVAC point name schemas to industry-standard ontologies. You read equipment "
+            "vendor-specific HVAC point name schemas to industry-standard ontologies. You read equipment "
             "documentation carefully and identify where naming conventions create ambiguity."
         ),
         llm=make_crewai_llm(),
@@ -51,7 +51,7 @@ def run_site_reader(site_id: str = "SITE-0042", session_id: str = "") -> SiteCon
 
     task = Task(
         description=f"""
-Analyse the HVAC site {site_id} to prepare for mapping its proprietary point names to the Brick ontology.
+Analyse the HVAC site {site_id} to prepare for mapping its vendor-specific point names to the Brick ontology.
 
 SITE: {site_id} ({site_doc.get("site_type", "Commercial Office Building")}, {site_doc.get("location", "")})
 EQUIPMENT SERIES: {equipment_series}
